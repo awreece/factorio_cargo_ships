@@ -283,6 +283,15 @@ function processPlacementQueue()
   RegisterPlacementOnTick()
 end
 
+local function isEnginePendingRemoval(engine)
+  if engine.to_be_deconstructed() then return true end
+  -- Player mining queues the engine for removal on the next tick.
+  for _, entry in pairs(storage.check_placement_queue) do
+    if entry.entity == engine and entry.player and entry.undo_index then return true end
+  end
+  return false
+end
+
 -- Disconnects/reconnects rolling stocks if they get wrongly connected/disconnected
 function OnTrainCreated(event)
   local contains_ship_engine = false
@@ -303,6 +312,12 @@ function OnTrainCreated(event)
   if #parts == 1 then
     -- reconnect!
     local engine = parts[1]
+    -- Removing the body splits the two-carriage train, so this handler runs for
+    -- the lone engine. Reconnecting an engine pending removal can couple it to a
+    -- nearby ship; overconnection repair disconnects it and calls this handler again.
+    if isEnginePendingRemoval(engine) then
+      return
+    end
     -- Connect engine in the direction of the expected ship body
     local connected = engine.connect_rolling_stock(storage.ship_engines[engine.name].coupled_ship)
     log("Tried connecting lonely "..engine.name.." at "..util.positiontostr(engine.position)..", result: "..tostring(connected))
